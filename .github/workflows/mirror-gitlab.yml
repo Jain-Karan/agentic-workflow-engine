@@ -1,0 +1,27 @@
+# Mirrors main and tags to GitLab. Needs a repository secret GITLAB_TOKEN (a GitLab personal
+# access token with write_repository) and a repository variable GITLAB_REPO, e.g.
+# gitlab.com/jain-karan/agentic-workflow-engine
+name: mirror-gitlab
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    if: ${{ vars.GITLAB_REPO != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push to GitLab
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_REPO: ${{ vars.GITLAB_REPO }}
+        run: |
+          git remote add gitlab "https://oauth2:${GITLAB_TOKEN}@${GITLAB_REPO}.git"
+          git push gitlab HEAD:main --force
+          git push gitlab --tags --force

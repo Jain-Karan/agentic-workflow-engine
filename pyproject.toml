@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-workflow-engine"
+version = "0.1.0"
+description = "LangGraph claims-intake agent that classifies, enriches and routes tickets through MCP tool servers, with retries and human approval gates on payouts."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Karan Jain" }]
+dependencies = [
+  "langgraph>=1.0",
+  "langchain-core>=0.3",
+  "mcp>=2.0",
+  "pydantic>=2.6",
+]
+
+[project.optional-dependencies]
+anthropic = ["langchain-anthropic>=0.3"]
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.5", "anyio>=4"]
+
+[project.scripts]
+claimflow = "claimflow.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/claimflow/synthetic.py" = ["E501"]  # message templates read better unwrapped
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
