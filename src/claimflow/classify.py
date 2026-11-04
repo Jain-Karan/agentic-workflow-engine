@@ -7,9 +7,11 @@ chat model with structured output; `make_classifier("anthropic")` gives Claude.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
+from pathlib import Path
 from typing import Protocol
 
 from pydantic import BaseModel, Field
@@ -101,13 +103,42 @@ def extract_amount(text: str) -> float | None:
     return max(vals) if vals else None
 
 
+CALIBRATION_FILE = Path(__file__).with_name("calibration.json")
+
+
+def evidence_state(scores: dict[Category, float]) -> str:
+    """Discrete evidence state: top keyword score and its margin over the runner-up."""
+    top, second = sorted(scores.values(), reverse=True)[:2]
+    return f"{top:.1f}|{top - second:.1f}"
+
+
+def load_table(path: Path = CALIBRATION_FILE) -> dict[str, float]:
+    return json.loads(path.read_text())["states"] if path.exists() else {}
+
+
 class KeywordClassifier:
-    def __init__(self, temperature: float = 1.5) -> None:
+    """Confidence is the empirical accuracy of the ticket's evidence state, from a table fitted
+    on a separate labelled backlog (benchmarks/calibrate_classifier.py). A softmax over raw
+    keyword sums was badly under-confident: tickets it scored 0.3-0.5 were right 100% of the
+    time and still went to a human. States the table hasn't seen fall back to that softmax."""
+
+    def __init__(self, table: dict[str, float] | None = None, temperature: float = 1.5) -> None:
+        self.table = load_table() if table is None else table
         self.temperature = temperature
 
     def scores(self, text: str) -> dict[Category, float]:
         t = text.lower()
         return {cat: sum(w for kw, w in kws.items() if kw in t) for cat, kws in KEYWORDS.items()}
+
+    def softmax_confidence(self, scores: dict[Category, float]) -> float:
+        """Uncalibrated fallback. Under-confident, but it never produced a confident-but-wrong
+        call on the benchmark, so it is the safe choice for evidence the table hasn't seen."""
+        z = [math.exp(v / self.temperature) for v in scores.values()]
+        return math.exp(max(scores.values()) / self.temperature) / sum(z)
+
+    def confidence(self, scores: dict[Category, float]) -> float:
+        seen = self.table.get(evidence_state(scores))
+        return round(seen if seen is not None else self.softmax_confidence(scores), 3)
 
     async def classify(self, subject: str, body: str) -> Classification:
         text = f"{subject}\n{body}"
@@ -117,10 +148,8 @@ class KeywordClassifier:
             return Classification(
                 category=Category.OTHER, confidence=0.3, reported_amount=extract_amount(text)
             )
-        z = [math.exp(v / self.temperature) for v in s.values()]
-        conf = math.exp(s[best] / self.temperature) / sum(z)
         return Classification(
-            category=best, confidence=round(conf, 3), reported_amount=extract_amount(text)
+            category=best, confidence=self.confidence(s), reported_amount=extract_amount(text)
         )
 
 
