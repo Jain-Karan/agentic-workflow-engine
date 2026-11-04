@@ -8,6 +8,7 @@ Permanent errors (NOT_FOUND, validation) fail immediately.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import random
 import re
@@ -33,14 +34,15 @@ class RetryPolicy:
     max_attempts: int = 6
     base: float = 0.25
     cap: float = 8.0
-    seed: int | None = None
-    _rng: random.Random = field(init=False, repr=False)
+    seed: int | None = None  # None: fresh jitter every run; int: reproducible per call
 
-    def __post_init__(self) -> None:
-        self._rng = random.Random(self.seed)
-
-    def delay(self, attempt: int, retry_after: float | None) -> float:
-        d = self._rng.uniform(0, min(self.cap, self.base * 2**attempt))
+    def delay(self, attempt: int, retry_after: float | None, key: str = "") -> float:
+        if self.seed is None:
+            u = random.random()
+        else:
+            h = hashlib.blake2b(f"{self.seed}|{key}|{attempt}".encode(), digest_size=8).digest()
+            u = int.from_bytes(h, "big") / 2**64
+        d = u * min(self.cap, self.base * 2**attempt)
         return max(d, retry_after or 0.0)
 
 
@@ -94,7 +96,8 @@ class ToolGateway:
             if last_code not in RETRYABLE or attempt == self.policy.max_attempts - 1:
                 break
             ra = _RETRY_AFTER.search(text)
-            d = self.policy.delay(attempt, float(ra.group(1)) if ra else None)
+            key = f"{server}.{tool}:{json.dumps(args, sort_keys=True)}"
+            d = self.policy.delay(attempt, float(ra.group(1)) if ra else None, key)
             self.stats.retries += 1
             self.stats.slept += d
             await self._sleep(d)

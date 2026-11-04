@@ -23,8 +23,12 @@ async def test_not_found_is_not_retried(servers, no_sleep):
 
 
 async def test_rate_limits_are_retried_with_retry_after(no_sleep):
+    from claimflow.backends import _unit
+
+    # faults are a pure function of the seed, so pick one whose first attempt is throttled
+    seed = next(s for s in range(100) if _unit(s, "before", "lookup_policy", "POL-000001", 0) < 0.6)
     erp = ERPSystem(
-        {"POL-000001": make_policy()}, FaultPlan(rate_limited=0.6, retry_after=2.0, seed=1)
+        {"POL-000001": make_policy()}, FaultPlan(rate_limited=0.6, retry_after=2.0, seed=seed)
     )
     async with ToolGateway(
         {"erp": build_erp_server(erp)}, RetryPolicy(max_attempts=10, seed=1), sleep=no_sleep
@@ -89,3 +93,14 @@ async def test_note_retry_after_commit_timeout_writes_once(no_sleep):
         )
     assert r["replayed"] is True
     assert t.state["T1"]["notes"] == ["hi"]
+
+
+async def test_fault_benchmark_is_reproducible_regardless_of_concurrency():
+    """Regression: faults were drawn from one shared RNG in arrival order, so the same seed
+    gave 260 / 256 / 222 retries on three runs of 600 tickets."""
+    from claimflow.bench import run_benchmark
+
+    f = dict(rate_limited=0.05, unavailable=0.03, timeout_after_commit=0.02, seed=3)
+    runs = [await run_benchmark(200, faults=FaultPlan(**f), concurrency=c) for c in (1, 16, 16)]
+    stats = {(r.retries, r.tool_calls, r.backoff_seconds) for r, _, _ in runs}
+    assert len(stats) == 1
