@@ -138,6 +138,7 @@ class TicketingSystem:
         self.faults = faults
         self.state: dict[str, dict] = {tid: {"status": "new", "notes": []} for tid in tickets}
         self.calls: dict[str, int] = {}
+        self._note_keys: dict[str, int] = {}  # idempotency key -> note index
 
     def _count(self, tool: str) -> None:
         self.calls[tool] = self.calls.get(tool, 0) + 1
@@ -159,9 +160,17 @@ class TicketingSystem:
             **{k: v for k, v in self.state[ticket_id].items() if k != "notes"},
         }
 
-    def add_note(self, ticket_id: str, note: str) -> dict:
+    def add_note(self, ticket_id: str, note: str, idempotency_key: str | None = None) -> dict:
         self._count("add_note")
         self.faults.before("add_note")
+        if idempotency_key and idempotency_key in self._note_keys:
+            return {
+                "ticket_id": ticket_id,
+                "notes": len(self.state[ticket_id]["notes"]),
+                "replayed": True,
+            }
         self.state[ticket_id]["notes"].append(note)
+        if idempotency_key:
+            self._note_keys[idempotency_key] = len(self.state[ticket_id]["notes"]) - 1
         self.faults.after_commit("add_note")
         return {"ticket_id": ticket_id, "notes": len(self.state[ticket_id]["notes"])}

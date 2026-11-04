@@ -77,3 +77,21 @@ async def test_backlog_runs_concurrently(systems, servers, no_sleep):
         )
     assert [r.outcome for r in results] == ["done"] * 4
     assert all(len(tickets.state[t]["notes"]) == 1 for t in tickets.state)
+
+
+async def test_agent_sends_note_key_so_retries_dont_duplicate(no_sleep):
+    """Regression at the graph level: the server-side fix alone passed its unit test while the
+    agent still sent add_note without a key."""
+    from claimflow.backends import ERPSystem, FaultPlan, TicketingSystem
+    from claimflow.mcp_servers import build_erp_server, build_ticketing_server
+    from tests.conftest import TICKETS, make_policy
+
+    faults = FaultPlan(timeout_after_commit=1.0, tools=frozenset({"add_note"}))
+    tickets = TicketingSystem(dict(TICKETS), faults)
+    servers = {
+        "erp": build_erp_server(ERPSystem({"POL-000001": make_policy()})),
+        "ticketing": build_ticketing_server(tickets),
+    }
+    async with ToolGateway(servers, sleep=no_sleep) as gw:
+        await run_ticket(build_graph(gw, KeywordClassifier()), "T1", approve_all)
+    assert len(tickets.state["T1"]["notes"]) == 1

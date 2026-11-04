@@ -69,3 +69,23 @@ async def test_payout_retry_after_commit_timeout_pays_once(no_sleep):
     # first attempt committed then timed out; the retry is recognised as a replay
     assert r["replayed"] is True
     assert erp.calls["issue_payout"] == 2 and len(erp.payments) == 1
+
+
+async def test_note_retry_after_commit_timeout_writes_once(no_sleep):
+    """Regression: add_note had no idempotency key, so a timeout after the note was committed
+    plus the gateway's retry wrote the note twice (46 of 2,000 tickets under injected faults)."""
+    from claimflow.backends import TicketingSystem
+    from claimflow.mcp_servers import build_ticketing_server
+    from tests.conftest import TICKETS
+
+    t = TicketingSystem(
+        dict(TICKETS), FaultPlan(timeout_after_commit=1.0, tools=frozenset({"add_note"}))
+    )
+    async with ToolGateway(
+        {"ticketing": build_ticketing_server(t)}, RetryPolicy(max_attempts=3), sleep=no_sleep
+    ) as gw:
+        r = await gw.call(
+            "ticketing", "add_note", {"ticket_id": "T1", "note": "hi", "idempotency_key": "T1:note"}
+        )
+    assert r["replayed"] is True
+    assert t.state["T1"]["notes"] == ["hi"]

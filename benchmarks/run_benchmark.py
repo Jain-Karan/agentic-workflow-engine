@@ -1,6 +1,6 @@
 """2,000-ticket backlog benchmark, clean and with injected API faults.
 
-    python benchmarks/run_benchmark.py          # prints a Markdown table, writes results.json
+python benchmarks/run_benchmark.py          # prints a Markdown table, writes results.json
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ ROWS = [
     ("failed tickets", "failed", "{}"),
     ("payout errors", "payout_errors", "{}"),
     ("duplicate payments", "duplicate_payments", "{}"),
+    ("duplicate ticket notes", "duplicate_notes", "{}"),
     ("tool calls", "tool_calls", "{:,}"),
     ("retries", "retries", "{:,}"),
     ("backoff time (virtual s)", "backoff_seconds", "{:,}"),

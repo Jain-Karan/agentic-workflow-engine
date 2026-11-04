@@ -76,9 +76,9 @@ def build_ticketing_server(tickets: TicketingSystem) -> MCPServer:
         return _guard(tickets.update_ticket, ticket_id, **fields)
 
     @s.tool()
-    def add_note(ticket_id: str, note: str) -> dict:
-        """Append an internal note to the ticket."""
-        return _guard(tickets.add_note, ticket_id, note)
+    def add_note(ticket_id: str, note: str, idempotency_key: str | None = None) -> dict:
+        """Append an internal note. Pass an idempotency_key so a retry can't add it twice."""
+        return _guard(tickets.add_note, ticket_id, note, idempotency_key)
 
     return s
 

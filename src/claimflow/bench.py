@@ -84,6 +84,7 @@ class BenchResult:
     failed: int
     payout_errors: int
     duplicate_payments: int
+    duplicate_notes: int
     tool_calls: int
     retries: int
     backoff_seconds: float
@@ -114,6 +115,7 @@ async def run_benchmark(
         graph = build_graph(gw, classifier or KeywordClassifier())
         results = await run_backlog(graph, list(by_id), truth_reviewer(by_id), concurrency)
         stats = gw.stats
+    duplicate_notes = sum(1 for st in ticketing.state.values() if len(st["notes"]) > 1)
 
     cat_ok = act_ok = auto = review = handback = failed = pay_err = dup = 0
     manual_min = agent_min = 0.0
@@ -161,6 +163,7 @@ async def run_benchmark(
             failed=failed,
             payout_errors=pay_err,
             duplicate_payments=dup,
+            duplicate_notes=duplicate_notes,
             tool_calls=stats.calls,
             retries=stats.retries,
             backoff_seconds=round(clock.t, 1),
