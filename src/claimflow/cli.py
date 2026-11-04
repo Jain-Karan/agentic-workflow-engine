@@ -1,8 +1,8 @@
 """`claimflow` command line.
 
-    claimflow demo                   # run 20 synthetic tickets, print each decision
-    claimflow bench -n 2000 --faults # backlog benchmark
-    claimflow demo --classifier anthropic   # classify with Claude (needs ANTHROPIC_API_KEY)
+claimflow demo                   # run 20 synthetic tickets, print each decision
+claimflow bench -n 2000 --faults # backlog benchmark
+claimflow demo --classifier anthropic   # classify with Claude (needs ANTHROPIC_API_KEY)
 """
 
 from __future__ import annotations
@@ -25,20 +25,24 @@ def _faults(on: bool) -> FaultPlan:
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
-    res, _, _ = asyncio.run(run_benchmark(args.n, args.seed, _faults(args.faults),
-                                          make_classifier(args.classifier)))
+    res, _, _ = asyncio.run(
+        run_benchmark(args.n, args.seed, _faults(args.faults), make_classifier(args.classifier))
+    )
     print(json.dumps(res.as_dict(), indent=2))
     return 0
 
 
 def cmd_demo(args: argparse.Namespace) -> int:
-    _, results, _ = asyncio.run(run_benchmark(args.n, args.seed, _faults(args.faults),
-                                              make_classifier(args.classifier)))
+    _, results, _ = asyncio.run(
+        run_benchmark(args.n, args.seed, _faults(args.faults), make_classifier(args.classifier))
+    )
     for r in results:
         d = r.decision or {}
         flag = " [reviewed]" if r.reviewed else ""
-        print(f"{r.ticket_id}  {d.get('category', '?'):15} {d.get('action', '?'):17} "
-              f"{d.get('queue', '?'):18} ${d.get('payout', 0):>9,.2f}{flag}")
+        print(
+            f"{r.ticket_id}  {d.get('category', '?'):15} {d.get('action', '?'):17} "
+            f"{d.get('queue', '?'):18} ${d.get('payout', 0):>9,.2f}{flag}"
+        )
     return 0
 
 

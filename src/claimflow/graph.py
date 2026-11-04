@@ -162,6 +162,9 @@ def build_graph(
                 {
                     "ticket_id": tid,
                     "note": "; ".join(state["log"] + d["reasons"]),
+                    # every non-idempotent write carries a key, so a timeout after commit
+                    # followed by a retry can't write twice (payouts above, notes here)
+                    "idempotency_key": f"{tid}:note:{action.value}",
                 },
             )
         except ToolCallError as e:
